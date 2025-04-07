@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import '../llm/llm_provider.dart';
 import '../llm/llm_service.dart';
 import '../llm/gpt4_service.dart';
+import 'task_type.dart';
 
 class CustomTaskAgent {
   final LLMProvider _llmProvider;
@@ -28,16 +29,41 @@ class CustomTaskAgent {
     }
   }
 
-  /// 处理文本输入并返回文本输出
-  Future<String> processText(String input) async {
+  /// 根据任务类型处理输入并返回输出
+  Future<String> processTask(TaskType taskType, String input) async {
     final service = _llmProvider.currentService;
     if (service == null) {
       throw Exception('未选择LLM服务');
     }
-    if (!_llmProvider.isFeatureSupported(LLMFeature.textCompletion)) {
-      throw Exception('当前LLM服务不支持文本处理');
+
+    switch (taskType) {
+      case TaskType.text:
+        if (!_llmProvider.isFeatureSupported(LLMFeature.textCompletion)) {
+          throw Exception('当前LLM服务不支持文本处理');
+        }
+        return await service.textCompletion(input);
+
+      case TaskType.image:
+        throw UnimplementedError('图片任务功能尚未实现');
+
+      case TaskType.video:
+        throw UnimplementedError('视频任务功能尚未实现');
+
+      case TaskType.audio:
+        throw UnimplementedError('语音任务功能尚未实现');
+
+      case TaskType.uiUnderstanding:
+        throw UnimplementedError('UI理解任务功能尚未实现');
+
+      case TaskType.fileUnderstanding:
+        throw UnimplementedError('文件理解任务功能尚未实现');
+
+      case TaskType.sensor:
+        throw UnimplementedError('传感器任务功能尚未实现');
+
+      case TaskType.automation:
+        throw UnimplementedError('自动执行任务功能尚未实现');
     }
-    return await service.textCompletion(input);
   }
 
   /// 处理语音输入并返回文本输出

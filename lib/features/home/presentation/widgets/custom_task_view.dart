@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/agent/custom_task_agent.dart';
+import '../../../../core/agent/task_type.dart';
 import '../../../../core/llm/llm_provider.dart';
 import '../../../../core/llm/key_manager.dart';
 import '../../../../core/llm/llm_service.dart';
@@ -19,9 +20,10 @@ class _CustomTaskViewState extends State<CustomTaskView> {
 
   late CustomTaskAgent _agent;
   late KeyManager _keyManager;
-  String _baseUrl = '';
   String _selectedModel = 'gpt-4o';
   List<String> _availableModels = [];
+  String? _apiKey;
+  TaskType _selectedTaskType = TaskType.text;
 
   @override
   void initState() {
@@ -43,14 +45,7 @@ class _CustomTaskViewState extends State<CustomTaskView> {
   Future<void> _initializeKeyManager() async {
     _keyManager = await KeyManager.getInstance();
     setState(() {
-      _baseUrl = _keyManager.getBaseUrl();
-    });
-  }
-
-  Future<void> _updateBaseUrl(String newBaseUrl) async {
-    await _keyManager.setBaseUrl(newBaseUrl);
-    setState(() {
-      _baseUrl = newBaseUrl;
+      _apiKey = _keyManager.getApiKey();
     });
   }
 
@@ -71,7 +66,10 @@ class _CustomTaskViewState extends State<CustomTaskView> {
     _agent.setModel(_selectedModel);
 
     try {
-      final response = await _agent.processText(_textController.text);
+      final response = await _agent.processTask(
+        _selectedTaskType,
+        _textController.text,
+      );
       setState(() {
         _result = response;
       });
@@ -101,6 +99,43 @@ class _CustomTaskViewState extends State<CustomTaskView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '任务类型',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButton<TaskType>(
+                      value: _selectedTaskType,
+                      isExpanded: true,
+                      items:
+                          TaskType.availableTypes.map((TaskType type) {
+                            return DropdownMenuItem<TaskType>(
+                              value: type,
+                              child: Text(type.displayName),
+                            );
+                          }).toList(),
+                      onChanged: (TaskType? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedTaskType = newValue;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -138,58 +173,99 @@ class _CustomTaskViewState extends State<CustomTaskView> {
               ),
             ),
             const SizedBox(height: 16),
-            // BaseURL输入区域
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Base URL',
-                hintText: '输入API基础地址',
-                border: OutlineInputBorder(),
-              ),
-              controller: TextEditingController(text: _baseUrl),
-              onChanged: _updateBaseUrl,
-            ),
-            const SizedBox(height: 16),
-
-            // 文本输入区域
-            TextField(
-              controller: _textController,
-              decoration: const InputDecoration(
-                hintText: '输入文本...',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-
-            // 操作按钮区域
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _isProcessing ? null : _processText,
-                  icon: const Icon(Icons.send),
-                  label: const Text('发送文本'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'API密钥',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _apiKey != null ? '已配置API密钥' : '未配置API密钥',
+                      style: TextStyle(
+                        color: _apiKey != null ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 16),
 
-            // 结果展示区域
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
+            // 根据任务类型显示不同的界面
+            if (_selectedTaskType == TaskType.text) ...[
+              // 文本输入区域
+              TextField(
+                controller: _textController,
+                decoration: const InputDecoration(
+                  hintText: '输入文本...',
+                  border: OutlineInputBorder(),
                 ),
-                child:
-                    _isProcessing
-                        ? const Center(child: CircularProgressIndicator())
-                        : SelectableText(
-                          _result.isEmpty ? '结果将在这里显示' : _result,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+
+              // 操作按钮区域
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _processText,
+                    icon: const Icon(Icons.send),
+                    label: Text('处理${_selectedTaskType.displayName}'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 结果展示区域
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child:
+                      _isProcessing
+                          ? const Center(child: CircularProgressIndicator())
+                          : SelectableText(
+                            _result.isEmpty ? '结果将在这里显示' : _result,
+                          ),
+                ),
+              ),
+            ] else ...[
+              // 未实现的任务类型显示提示信息
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.construction,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '${_selectedTaskType.displayName}功能尚未实现',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
                         ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

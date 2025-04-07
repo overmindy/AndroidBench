@@ -32,7 +32,19 @@ class GPT4Service implements LLMService {
 
   static Future<GPT4Service> getInstance() async {
     final keyManager = await KeyManager.getInstance();
-    return GPT4Service._(keyManager: keyManager);
+    final service = GPT4Service._(keyManager: keyManager);
+    // 异步加载模型列表
+    service._loadAvailableModels();
+    return service;
+  }
+
+  Future<void> _loadAvailableModels() async {
+    try {
+      await testConnection();
+    } catch (e) {
+      // 加载失败时不阻塞服务初始化
+      print('加载模型列表失败: $e');
+    }
   }
 
   @override
@@ -152,10 +164,26 @@ class GPT4Service implements LLMService {
 
       if (response.statusCode == 200) {
         final data = response.data;
-        _availableModels =
+        final modelList =
             (data['data'] as List)
+                .map(
+                  (model) => {
+                    'id': model['id'] as String,
+                    'owned_by': model['owned_by'] as String,
+                  },
+                )
+                .toList();
+
+        // 根据owned_by属性过滤和分类模型
+        _availableModels =
+            modelList
+                .where(
+                  (model) =>
+                      model['owned_by'] == 'openai' || // OpenAI官方模型
+                      model['owned_by'] == 'custom' || // 自定义模型
+                      model['id'].toString().startsWith('gpt-'),
+                ) // 兼容旧版本
                 .map((model) => model['id'] as String)
-                .where((id) => id.startsWith('gpt-'))
                 .toList();
 
         // 如果当前选择的模型不在可用列表中，选择第一个可用的模型
