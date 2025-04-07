@@ -30,6 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_accessibility_service: 0.2.5
 
   # UI Components
   cupertino_icons: ^1.0.8
@@ -54,6 +55,7 @@ dependencies:
   permission_handler: ^11.3.0  # 权限管理
   image_picker: ^1.0.7        # 图片选择
   record: ^5.0.4             # 音频录制
+  flutter_launcher_icons: ^0.14.3
 
 dev_dependencies:
   flutter_test:
@@ -107,3 +109,10 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+flutter_launcher_icons:
+  image_path: "assets/icons/images.jpg"
+  android: "launcher_icon"
+  ios: true
+  web:
+    generate: true
+    image_path: "assets/icons/images.jpg"

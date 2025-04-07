@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/theme_manager.dart';
@@ -16,9 +17,8 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   String _version = '';
-  bool _cameraPermission = false;
-  bool _microphonePermission = false;
-  bool _storagePermission = false;
+  bool _allPermissions = false;
+  bool _accessibilityPermission = false;
   final TextEditingController _apiKeyController = TextEditingController();
   final TextEditingController _baseUrlController = TextEditingController();
   bool _isLoading = false;
@@ -52,21 +52,19 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _checkPermissions() async {
     if (kIsWeb) {
       setState(() {
-        _cameraPermission = false;
-        _microphonePermission = false;
-        _storagePermission = false;
+        _allPermissions = false;
+        _accessibilityPermission = false;
       });
       return;
     }
 
-    final camera = await Permission.camera.status;
-    final microphone = await Permission.microphone.status;
-    final storage = await Permission.storage.status;
+    final allPermissions = await Permission.requestInstallPackages.status;
+    final accessibility =
+        await FlutterAccessibilityService.isAccessibilityPermissionEnabled();
 
     setState(() {
-      _cameraPermission = camera.isGranted;
-      _microphonePermission = microphone.isGranted;
-      _storagePermission = storage.isGranted;
+      _allPermissions = allPermissions.isGranted;
+      _accessibilityPermission = accessibility;
     });
   }
 
@@ -78,22 +76,36 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    final status = await permission.request();
+    // 根据权限类型选择不同的跳转方式
+    if (permission == Permission.systemAlertWindow) {
+      await FlutterAccessibilityService.requestAccessibilityPermission();
+    } else {
+      await openAppSettings();
+    }
+
+    // 检查权限状态
+    final status = await permission.status;
     setState(() {
       switch (permission) {
-        case Permission.camera:
-          _cameraPermission = status.isGranted;
+        case Permission.requestInstallPackages:
+          _allPermissions = status.isGranted;
           break;
-        case Permission.microphone:
-          _microphonePermission = status.isGranted;
-          break;
-        case Permission.storage:
-          _storagePermission = status.isGranted;
+        case Permission.systemAlertWindow:
+          _accessibilityPermission = status.isGranted;
           break;
         default:
           break;
       }
     });
+
+    // 显示提示信息
+    if (!status.isGranted) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请在系统设置中手动开启所需权限')));
+      }
+    }
   }
 
   @override
@@ -117,22 +129,19 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(),
           const ListTile(leading: Icon(Icons.security), title: Text('权限管理')),
           SwitchListTile(
-            secondary: const Icon(Icons.camera_alt),
-            title: const Text('相机权限'),
-            value: _cameraPermission,
-            onChanged: (value) => _requestPermission(Permission.camera),
+            secondary: const Icon(Icons.admin_panel_settings),
+            title: const Text('所有权限'),
+            value: _allPermissions,
+            onChanged:
+                (value) =>
+                    _requestPermission(Permission.requestInstallPackages),
           ),
           SwitchListTile(
-            secondary: const Icon(Icons.mic),
-            title: const Text('麦克风权限'),
-            value: _microphonePermission,
-            onChanged: (value) => _requestPermission(Permission.microphone),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.storage),
-            title: const Text('存储权限'),
-            value: _storagePermission,
-            onChanged: (value) => _requestPermission(Permission.storage),
+            secondary: const Icon(Icons.accessibility_new),
+            title: const Text('无障碍权限'),
+            value: _accessibilityPermission,
+            onChanged:
+                (value) => _requestPermission(Permission.systemAlertWindow),
           ),
           const Divider(),
           ListTile(

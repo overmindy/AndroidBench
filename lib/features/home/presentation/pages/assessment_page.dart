@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/llm/llm_provider.dart';
 import '../../../../core/llm/llm_service.dart';
 import '../../../../core/agent/agent_provider.dart';
@@ -15,7 +16,9 @@ class AssessmentPage extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LLMProvider()),
         ChangeNotifierProvider(create: (_) => AgentProvider()),
       ],
-      child: const AssessmentView(),
+      builder: (context, child) {
+        return const AssessmentView();
+      },
     );
   }
 }
@@ -66,15 +69,7 @@ class AssessmentView extends StatelessWidget {
                 ElevatedButton(
                   onPressed: () {
                     if (currentAgent == AgentRole.custom) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder:
-                              (context) => ChangeNotifierProvider.value(
-                                value: provider,
-                                child: const CustomTaskView(),
-                              ),
-                        ),
-                      );
+                      context.push('/custom-task');
                     }
                     // TODO: 实现其他角色的测评功能
                   },

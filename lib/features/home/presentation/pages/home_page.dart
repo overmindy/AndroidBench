@@ -8,41 +8,48 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String location = GoRouterState.of(context).uri.toString();
+    final bool hideNavBar =
+        location.contains('/custom-task') || location.contains('/api-config');
+
     return Scaffold(
       body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _getCurrentIndex(context),
-        onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go('/');
-              break;
-            case 1:
-              context.go('/ranking');
-              break;
-            case 2:
-              context.go('/settings');
-              break;
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.assessment_outlined),
-            selectedIcon: Icon(Icons.assessment),
-            label: '智能测评',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.leaderboard_outlined),
-            selectedIcon: Icon(Icons.leaderboard),
-            label: '排行榜',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: '设置',
-          ),
-        ],
-      ),
+      bottomNavigationBar:
+          hideNavBar
+              ? null
+              : NavigationBar(
+                selectedIndex: _getCurrentIndex(context),
+                onDestinationSelected: (index) {
+                  switch (index) {
+                    case 0:
+                      context.go('/');
+                      break;
+                    case 1:
+                      context.go('/ranking');
+                      break;
+                    case 2:
+                      context.go('/settings');
+                      break;
+                  }
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.assessment_outlined),
+                    selectedIcon: Icon(Icons.assessment),
+                    label: '智能测评',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.leaderboard_outlined),
+                    selectedIcon: Icon(Icons.leaderboard),
+                    label: '排行榜',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings),
+                    label: '设置',
+                  ),
+                ],
+              ),
     );
   }
 

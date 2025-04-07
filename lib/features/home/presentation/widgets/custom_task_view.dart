@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/agent/custom_task_agent.dart';
 import '../../../../core/agent/task_type.dart';
 import '../../../../core/llm/llm_provider.dart';
@@ -28,9 +29,16 @@ class _CustomTaskViewState extends State<CustomTaskView> {
   @override
   void initState() {
     super.initState();
-    _agent = CustomTaskAgent(context.read<LLMProvider>());
     _initializeKeyManager();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // if (_agent == null) {
+    _agent = CustomTaskAgent(context.read<LLMProvider>());
     _initializeModels();
+    // }
   }
 
   void _initializeModels() {
@@ -87,11 +95,12 @@ class _CustomTaskViewState extends State<CustomTaskView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       appBar: AppBar(
         title: const Text('自定义任务'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: Padding(
@@ -142,24 +151,41 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '选择模型',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '选择模型',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: () {
+                            setState(() {
+                              _availableModels = [];
+                              _initializeModels();
+                            });
+                          },
+                          tooltip: '刷新模型列表',
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     DropdownButton<String>(
                       value: _selectedModel,
                       isExpanded: true,
                       items:
-                          _availableModels.map((String model) {
-                            return DropdownMenuItem<String>(
-                              value: model,
-                              child: Text(model),
-                            );
-                          }).toList(),
+                          _availableModels.isEmpty
+                              ? []
+                              : _availableModels.map((String model) {
+                                return DropdownMenuItem<String>(
+                                  value: model,
+                                  child: Text(model),
+                                );
+                              }).toList(),
                       onChanged: (String? newValue) {
                         if (newValue != null) {
                           setState(() {
@@ -167,6 +193,7 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                           });
                         }
                       },
+                      hint: const Text('加载中...'),
                     ),
                   ],
                 ),

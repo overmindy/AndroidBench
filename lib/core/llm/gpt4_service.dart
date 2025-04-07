@@ -39,11 +39,21 @@ class GPT4Service implements LLMService {
   }
 
   Future<void> _loadAvailableModels() async {
+    final startTime = DateTime.now();
     try {
-      await testConnection();
+      final connected = await testConnection();
+      if (!connected) {
+        // 如果连接测试失败，设置默认模型列表
+        _availableModels = ['gpt-4o-mini', 'gpt-4o'];
+        _model = 'gpt-4o-mini';
+      }
     } catch (e) {
-      // 加载失败时不阻塞服务初始化
+      // 加载失败时设置默认模型列表
+      _availableModels = ['gpt-4o-mini', 'gpt-4o'];
+      _model = 'gpt-4o-mini';
       print('加载模型列表失败: $e');
+    } finally {
+      print('模型加载耗时: ${DateTime.now().difference(startTime).inMilliseconds}ms');
     }
   }
 
@@ -116,6 +126,7 @@ class GPT4Service implements LLMService {
   }
 
   List<String> getAvailableModels() {
+    _loadAvailableModels();
     return List.from(_availableModels);
   }
 
@@ -148,6 +159,7 @@ class GPT4Service implements LLMService {
   Future<bool> testConnection() async {
     final apiKey = _keyManager.getApiKey();
     if (apiKey == null || apiKey.isEmpty) {
+      print('API密钥未设置');
       return false;
     }
 
@@ -160,10 +172,17 @@ class GPT4Service implements LLMService {
       ).firstMatch(baseUrl);
       final modelsUrl =
           match != null ? '${match.group(1)}/v1/models' : '$baseUrl/v1/models';
+
+      print('正在请求模型列表: $modelsUrl');
       final response = await _apiClient.get(modelsUrl);
 
       if (response.statusCode == 200) {
         final data = response.data;
+        if (data == null || !data.containsKey('data')) {
+          print('API响应格式错误');
+          return false;
+        }
+
         final modelList =
             (data['data'] as List)
                 .map(

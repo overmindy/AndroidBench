@@ -6,7 +6,7 @@ import 'task_type.dart';
 
 class CustomTaskAgent {
   final LLMProvider _llmProvider;
-  String _selectedModel = 'gpt-4o';
+  String _selectedModel = 'gpt-4o-mini';
 
   CustomTaskAgent(this._llmProvider);
 
