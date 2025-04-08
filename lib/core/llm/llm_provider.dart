@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'llm_service.dart';
+import 'multi_modal_service.dart';
 import 'gpt4_service.dart';
-import 'deepseek_service.dart';
 
 class LLMProvider extends ChangeNotifier {
-  static List<LLMService> _availableServices = [];
+  static List<MultiModalService> _availableServices = [];
 
   static Future<void> initializeServices() async {
     final gpt4Service = await GPT4Service.getInstance();
     _availableServices = [gpt4Service];
   }
 
-  LLMService? _currentService;
+  MultiModalService? _currentService;
 
   LLMProvider() {
     initializeServices().then((_) {
@@ -22,15 +21,15 @@ class LLMProvider extends ChangeNotifier {
     });
   }
 
-  /// 获取当前选择的LLM服务
-  LLMService? get currentService => _currentService;
+  /// 获取当前选择的多模态服务
+  MultiModalService? get currentService => _currentService;
 
-  /// 获取所有可用的LLM服务列表
-  List<LLMService> get availableServices =>
+  /// 获取所有可用的多模态服务列表
+  List<MultiModalService> get availableServices =>
       List.unmodifiable(_availableServices);
 
-  /// 设置当前使用的LLM服务
-  void setCurrentService(LLMService service) {
+  /// 设置当前使用的多模态服务
+  void setCurrentService(MultiModalService service) {
     if (_currentService != service) {
       _currentService = service;
       notifyListeners();
@@ -38,7 +37,7 @@ class LLMProvider extends ChangeNotifier {
   }
 
   /// 检查指定功能是否可用
-  bool isFeatureSupported(LLMFeature feature) {
+  bool isFeatureSupported(ModalityFeature feature) {
     return _currentService?.supportedFeatures.contains(feature) ?? false;
   }
 }

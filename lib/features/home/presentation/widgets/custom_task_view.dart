@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:typed_data';
 import '../../../../core/agent/custom_task_agent.dart';
 import '../../../../core/agent/task_type.dart';
 import '../../../../core/llm/llm_provider.dart';
 import '../../../../core/llm/key_manager.dart';
-import '../../../../core/llm/llm_service.dart';
 
 class CustomTaskView extends StatefulWidget {
   const CustomTaskView({super.key});
@@ -26,6 +28,72 @@ class _CustomTaskViewState extends State<CustomTaskView> {
   String? _apiKey;
   TaskType _selectedTaskType = TaskType.text;
 
+  // 多媒体文件相关变量
+  Uint8List? _selectedFileData;
+  String? _selectedFileName;
+  bool _isRecording = false;
+
+  // 文件选择方法
+  Future<void> _pickFile(String type) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type:
+            type == 'image'
+                ? FileType.image
+                : type == 'video'
+                ? FileType.video
+                : FileType.audio,
+        allowMultiple: false,
+      );
+
+      if (result != null) {
+        setState(() {
+          _selectedFileData = result.files.first.bytes!;
+          _selectedFileName = result.files.first.name;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _result = '文件选择失败: $e';
+      });
+    }
+  }
+
+  // 录音相关方法
+  Future<void> _toggleRecording() async {
+    if (!_isRecording) {
+      try {
+        final hasPermission = await Permission.microphone.request().isGranted;
+        if (!hasPermission) {
+          setState(() {
+            _result = '需要麦克风权限才能录音';
+          });
+          return;
+        }
+
+        // TODO: 实现录音功能
+        setState(() {
+          _isRecording = true;
+        });
+      } catch (e) {
+        setState(() {
+          _result = '录音失败: $e';
+        });
+      }
+    } else {
+      try {
+        // TODO: 停止录音并获取录音文件
+        setState(() {
+          _isRecording = false;
+        });
+      } catch (e) {
+        setState(() {
+          _result = '停止录音失败: $e';
+        });
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -41,9 +109,13 @@ class _CustomTaskViewState extends State<CustomTaskView> {
     // }
   }
 
-  void _initializeModels() {
+  Future<void> _initializeModels() async {
     setState(() {
-      _availableModels = _agent.getAvailableModels();
+      _availableModels = [];
+    });
+    final models = await _agent.getAvailableModels();
+    setState(() {
+      _availableModels = models;
       if (_availableModels.isNotEmpty) {
         _selectedModel = _availableModels[0];
       }
@@ -63,8 +135,14 @@ class _CustomTaskViewState extends State<CustomTaskView> {
     super.dispose();
   }
 
-  Future<void> _processText() async {
-    if (_textController.text.isEmpty) return;
+  Future<void> _processTask() async {
+    String input = '';
+    if (_selectedTaskType == TaskType.text) {
+      if (_textController.text.isEmpty) return;
+      input = _textController.text;
+    } else if (_selectedFileData == null) {
+      return;
+    }
 
     setState(() {
       _isProcessing = true;
@@ -76,7 +154,7 @@ class _CustomTaskViewState extends State<CustomTaskView> {
     try {
       final response = await _agent.processTask(
         _selectedTaskType,
-        _textController.text,
+        _selectedTaskType == TaskType.text ? input : _selectedFileData!,
       );
       setState(() {
         _result = response;
@@ -244,7 +322,7 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : _processText,
+                    onPressed: _isProcessing ? null : _processTask,
                     icon: const Icon(Icons.send),
                     label: Text('处理${_selectedTaskType.displayName}'),
                   ),
@@ -266,6 +344,85 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                           : SelectableText(
                             _result.isEmpty ? '结果将在这里显示' : _result,
                           ),
+                ),
+              ),
+            ] else if (_selectedTaskType == TaskType.image) ...[
+              // 图片选择和预览区域
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : () => _pickFile('image'),
+                icon: const Icon(Icons.image),
+                label: const Text('选择图片'),
+              ),
+              const SizedBox(height: 16),
+
+              // 图片预览区域
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child:
+                      _isProcessing
+                          ? const Center(child: CircularProgressIndicator())
+                          : const Center(child: Text('选择图片以开始处理')),
+                ),
+              ),
+            ] else if (_selectedTaskType == TaskType.video) ...[
+              // 视频选择和预览区域
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : () => _pickFile('video'),
+                icon: const Icon(Icons.video_library),
+                label: const Text('选择视频'),
+              ),
+              const SizedBox(height: 16),
+
+              // 视频预览区域
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child:
+                      _isProcessing
+                          ? const Center(child: CircularProgressIndicator())
+                          : const Center(child: Text('选择视频以开始处理')),
+                ),
+              ),
+            ] else if (_selectedTaskType == TaskType.audio) ...[
+              // 语音录制和播放区域
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _toggleRecording,
+                    icon: Icon(_isRecording ? Icons.stop : Icons.mic),
+                    label: Text(_isRecording ? '停止录音' : '开始录音'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : () => _pickFile('audio'),
+                    icon: const Icon(Icons.audio_file),
+                    label: const Text('选择音频'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 音频播放和结果显示区域
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child:
+                      _isProcessing
+                          ? const Center(child: CircularProgressIndicator())
+                          : const Center(child: Text('选择或录制音频以开始处理')),
                 ),
               ),
             ] else ...[

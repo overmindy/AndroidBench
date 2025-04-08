@@ -54,6 +54,14 @@ class KeyManager {
   }
 
   Future<void> setBaseUrl(String baseUrl) async {
-    await _prefs.setString(_baseUrlStorageKey, baseUrl);
+    // 解析URL，只保留基本地址部分
+    Uri uri = Uri.parse(baseUrl);
+    String cleanBaseUrl =
+        '${uri.scheme}://${uri.host}${uri.port != 80 && uri.port != 443 ? ":${uri.port}" : ""}';
+    // 如果原始路径包含v1，则保留它
+    if (uri.path.contains('/v1')) {
+      cleanBaseUrl += '/v1';
+    }
+    await _prefs.setString(_baseUrlStorageKey, cleanBaseUrl);
   }
 }

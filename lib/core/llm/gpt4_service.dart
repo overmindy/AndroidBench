@@ -1,34 +1,16 @@
 import 'dart:typed_data';
-import '../network/api_client.dart';
-import 'llm_service.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'key_manager.dart';
+import 'multi_modal_service.dart';
+import 'api_service.dart';
 
-class GPT4Service implements LLMService {
-  @override
-  String get modelDescription {
-    if (_model.isEmpty) {
-      return '未选择模型';
-    }
-    switch (_model) {
-      case 'gpt-4':
-        return 'GPT-4基础模型，支持高级文本理解和生成';
-      case 'gpt-4-32k':
-        return 'GPT-4扩展上下文模型，支持更长的对话历史';
-      case 'gpt-4-turbo':
-        return 'GPT-4优化版本，具有更快的响应速度';
-      default:
-        return 'GPT-4系列模型';
-    }
-  }
-
-  final KeyManager _keyManager;
-  final ApiClient _apiClient;
+class GPT4Service extends ApiService implements MultiModalService {
   String _model = 'gpt-4o';
   List<String> _availableModels = [];
 
   GPT4Service._({required KeyManager keyManager})
-    : _keyManager = keyManager,
-      _apiClient = ApiClient();
+    : super(keyManager: keyManager);
 
   static Future<GPT4Service> getInstance() async {
     final keyManager = await KeyManager.getInstance();
@@ -43,12 +25,10 @@ class GPT4Service implements LLMService {
     try {
       final connected = await testConnection();
       if (!connected) {
-        // 如果连接测试失败，设置默认模型列表
         _availableModels = ['gpt-4o-mini', 'gpt-4o'];
         _model = 'gpt-4o-mini';
       }
     } catch (e) {
-      // 加载失败时设置默认模型列表
       _availableModels = ['gpt-4o-mini', 'gpt-4o'];
       _model = 'gpt-4o-mini';
       print('加载模型列表失败: $e');
@@ -58,163 +38,233 @@ class GPT4Service implements LLMService {
   }
 
   @override
-  Future<String> textCompletion(String prompt) async {
-    final apiKey = _keyManager.getApiKey();
-    if (apiKey == null || apiKey.isEmpty) {
-      throw Exception('API密钥未设置');
-    }
-
-    try {
-      _apiClient.updateToken(apiKey);
-      final response = await _apiClient.post(
-        baseUrl,
-        data: {
-          'model': _model,
-          'messages': [
-            {'role': 'user', 'content': prompt},
-          ],
-          'temperature': 0.7,
-          'max_tokens': 1000,
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data;
-        return data['choices'][0]['message']['content'];
-      } else if (response.statusCode == 401) {
-        throw Exception('API密钥无效');
-      } else {
-        throw Exception('请求失败: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('调用GPT-4服务失败: $e');
-    }
+  Future<String> textToText(String text) async {
+    final response = await post(
+      '/chat/completions',
+      data: {
+        'model': _model,
+        'messages': [
+          {'role': 'user', 'content': text},
+        ],
+        'temperature': 0.7,
+        'max_tokens': 1000,
+      },
+    );
+    return response['choices'][0]['message']['content'];
   }
 
   @override
   Future<String> speechToText(Uint8List audioData) async {
-    // TODO: 实现GPT-4的语音转文本功能
-    throw UnimplementedError('GPT-4语音转文本功能尚未实现');
+    final response = await post(
+      '/audio/transcriptions',
+      data: {'file': audioData, 'model': _model, 'response_format': 'text'},
+    );
+    return response.toString();
   }
 
   @override
   Future<Uint8List> textToSpeech(String text) async {
-    // TODO: 实现GPT-4的文本转语音功能
-    throw UnimplementedError('GPT-4文本转语音功能尚未实现');
+    final response = await post(
+      '/audio/speech',
+      data: {'model': _model, 'input': text, 'voice': 'alloy'},
+    );
+    return handleBinaryResponse(response);
   }
 
   @override
-  Future<String> imageUnderstanding(Uint8List imageData) async {
-    // TODO: 实现GPT-4的图像理解功能
-    throw UnimplementedError('GPT-4图像理解功能尚未实现');
+  Future<String> imageToText(Uint8List imageData) async {
+    final response = await post(
+      '/chat/completions',
+      data: {
+        'model': _model,
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:image/jpeg;base64,${base64Encode(imageData)}',
+                },
+              },
+              {'type': 'text', 'text': '请描述这张图片'},
+            ],
+          },
+        ],
+        'max_tokens': 300,
+      },
+    );
+    return response['choices'][0]['message']['content'];
   }
 
   @override
-  Future<Uint8List> imageGeneration(String prompt) async {
-    // TODO: 实现GPT-4的图像生成功能
-    throw UnimplementedError('GPT-4图像生成功能尚未实现');
+  Future<Uint8List> textToImage(String text) async {
+    final response = await post(
+      '/images/generations',
+      data: {'model': 'dall-e-3', 'prompt': text, 'n': 1, 'size': '1024x1024'},
+    );
+    return handleBinaryResponse(response);
   }
 
-  void setModel(String model) {
-    if (_availableModels.isEmpty) {
-      throw Exception('可用模型列表尚未初始化');
-    }
-    if (!_availableModels.contains(model)) {
-      throw Exception('不支持的模型: $model');
-    }
-    _model = model;
+  @override
+  Future<String> textImageToText(String text, Uint8List imageData) {
+    throw UnimplementedError();
   }
 
-  List<String> getAvailableModels() {
-    _loadAvailableModels();
-    return List.from(_availableModels);
+  @override
+  Future<String> textSpeechToText(String text, Uint8List audioData) {
+    throw UnimplementedError();
   }
 
-  String get baseUrl => _keyManager.getBaseUrl();
+  @override
+  Future<Uint8List> textImageToSpeech(String text, Uint8List imageData) {
+    throw UnimplementedError();
+  }
 
   @override
-  String get serviceName => 'OpenAI';
+  Future<Uint8List> textSpeechToSpeech(String text, Uint8List audioData) {
+    throw UnimplementedError();
+  }
 
   @override
-  String get serviceDescription => '提供GPT系列模型，支持文本、语音和图像处理功能';
+  Future<Uint8List> speechToSpeech(Uint8List audioData) {
+    throw UnimplementedError();
+  }
 
   @override
-  List<String> get availableModels => List.unmodifiable(_availableModels);
+  String get serviceName => 'GPT-4';
+
+  @override
+  String get serviceDescription => 'OpenAI GPT-4 多模态服务';
+
+  @override
+  List<ModalityFeature> get supportedFeatures => [
+    ModalityFeature.textToText,
+    ModalityFeature.speechToText,
+    ModalityFeature.textToSpeech,
+    ModalityFeature.imageToText,
+    ModalityFeature.textToImage,
+  ];
+
+  @override
+  List<String> get availableModels => _availableModels;
 
   @override
   String? get currentModel => _model;
 
   @override
-  void setCurrentModel(String model) => setModel(model);
+  void setCurrentModel(String model) {
+    if (_availableModels.contains(model)) {
+      _model = model;
+    }
+  }
 
   @override
-  List<LLMFeature> get supportedFeatures => [
-    LLMFeature.textCompletion,
-    LLMFeature.speechToText,
-    LLMFeature.textToSpeech,
-    LLMFeature.imageUnderstanding,
-    LLMFeature.imageGeneration,
-  ];
+  String get modelDescription => '当前使用的模型: $_model';
+
+  @override
+  String get apiVersion => 'v1';
 
   Future<bool> testConnection() async {
-    final apiKey = _keyManager.getApiKey();
-    if (apiKey == null || apiKey.isEmpty) {
-      print('API密钥未设置');
+    try {
+      final response = await get('/models');
+      final data = response;
+      if (data == null || !data.containsKey('data')) {
+        print('API响应格式错误');
+        return false;
+      }
+
+      final modelList =
+          (data['data'] as List)
+              .map(
+                (model) => {
+                  'id': model['id'] as String,
+                  'owned_by': model['owned_by'] as String,
+                },
+              )
+              .toList();
+
+      // 根据owned_by属性过滤和分类模型
+      _availableModels =
+          modelList
+              .where(
+                (model) =>
+                    model['owned_by'] == 'openai' || // OpenAI官方模型
+                    model['owned_by'] == 'custom' || // 自定义模型
+                    model['id'].toString().startsWith('gpt-'),
+              ) // 兼容旧版本
+              .map((model) => model['id'] as String)
+              .toList();
+
+      // 如果当前选择的模型不在可用列表中，选择第一个可用的模型
+      if (_availableModels.isNotEmpty && !_availableModels.contains(_model)) {
+        _model = _availableModels.first;
+      }
+
+      return true;
+    } catch (e) {
+      print('测试连接失败: $e');
       return false;
     }
+  }
 
+  Future<Uint8List> handleBinaryResponse(dynamic response) async {
+    if (response is List<int>) {
+      return Uint8List.fromList(response);
+    }
+    throw Exception('Invalid binary response');
+  }
+
+  Future<dynamic> get(String path) async {
+    if (!isServiceAvailable) {
+      throw Exception('API服务不可用');
+    }
+    final dio = Dio();
     try {
-      _apiClient.updateToken(apiKey);
-      final baseUrl = _keyManager.getBaseUrl();
-      // 使用正则表达式提取chat之前的部分
-      final match = RegExp(
-        r'^(.*?)(?:/v\d+)?/(?:chat|completions)',
-      ).firstMatch(baseUrl);
-      final modelsUrl =
-          match != null ? '${match.group(1)}/v1/models' : '$baseUrl/v1/models';
+      final response = await dio.get(
+        getEndpoint(path),
+        options: Options(headers: headers),
+      );
 
-      print('正在请求模型列表: $modelsUrl');
-      final response = await _apiClient.get(modelsUrl);
-
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data == null || !data.containsKey('data')) {
-          print('API响应格式错误');
-          return false;
-        }
-
-        final modelList =
-            (data['data'] as List)
-                .map(
-                  (model) => {
-                    'id': model['id'] as String,
-                    'owned_by': model['owned_by'] as String,
-                  },
-                )
-                .toList();
-
-        // 根据owned_by属性过滤和分类模型
-        _availableModels =
-            modelList
-                .where(
-                  (model) =>
-                      model['owned_by'] == 'openai' || // OpenAI官方模型
-                      model['owned_by'] == 'custom' || // 自定义模型
-                      model['id'].toString().startsWith('gpt-'),
-                ) // 兼容旧版本
-                .map((model) => model['id'] as String)
-                .toList();
-
-        // 如果当前选择的模型不在可用列表中，选择第一个可用的模型
-        if (_availableModels.isNotEmpty && !_availableModels.contains(_model)) {
-          _model = _availableModels.first;
-        }
-
-        return true;
+      if (response.statusCode != 200) {
+        throw Exception('请求失败: ${response.statusCode} - ${response.data}');
       }
-      return false;
-    } catch (e) {
-      return false;
+
+      return response.data;
+    } on DioException catch (e) {
+      throw Exception('请求失败: ${e.message}');
+    }
+  }
+
+  Future<dynamic> post(String path, {dynamic data}) async {
+    if (!isServiceAvailable) {
+      throw Exception('API服务不可用');
+    }
+    final dio = Dio();
+    try {
+      final response = await dio.post(
+        getEndpoint(path),
+        data: data,
+        options: Options(headers: headers, responseType: ResponseType.json),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('请求失败: ${response.statusCode} - ${response.data}');
+      }
+
+      // 处理二进制响应
+      if (response.headers.map['content-type']?.first.contains(
+            'application/octet-stream',
+          ) ??
+          false) {
+        if (response.data is List<int>) {
+          return response.data;
+        }
+      }
+
+      return response.data;
+    } on DioException catch (e) {
+      throw Exception('请求失败: ${e.message}');
     }
   }
 }

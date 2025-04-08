@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 import '../llm/llm_provider.dart';
-import '../llm/llm_service.dart';
+import '../llm/multi_modal_service.dart';
 import '../llm/gpt4_service.dart';
 import 'task_type.dart';
 
@@ -10,27 +10,31 @@ class CustomTaskAgent {
 
   CustomTaskAgent(this._llmProvider);
 
-  List<String> getAvailableModels() {
-    if (_llmProvider.currentService is GPT4Service) {
-      return (_llmProvider.currentService as GPT4Service).getAvailableModels();
+  Future<List<String>> getAvailableModels() async {
+    final service = _llmProvider.currentService;
+    if (service is GPT4Service) {
+      await service.testConnection();
+    }
+    if (service != null) {
+      return service.availableModels;
     }
     return [];
   }
 
   void setModel(String model) {
-    if (_llmProvider.currentService is GPT4Service) {
-      final gpt4Service = _llmProvider.currentService as GPT4Service;
-      final availableModels = gpt4Service.getAvailableModels();
+    final service = _llmProvider.currentService;
+    if (service != null) {
+      final availableModels = service.availableModels;
       if (!availableModels.contains(model)) {
         throw Exception('不支持的模型: $model');
       }
-      gpt4Service.setModel(model);
+      service.setCurrentModel(model);
       _selectedModel = model;
     }
   }
 
   /// 根据任务类型处理输入并返回输出
-  Future<String> processTask(TaskType taskType, String input) async {
+  Future<String> processTask(TaskType taskType, dynamic input) async {
     final service = _llmProvider.currentService;
     if (service == null) {
       throw Exception('未选择LLM服务');
@@ -38,19 +42,25 @@ class CustomTaskAgent {
 
     switch (taskType) {
       case TaskType.text:
-        if (!_llmProvider.isFeatureSupported(LLMFeature.textCompletion)) {
-          throw Exception('当前LLM服务不支持文本处理');
+        if (!_llmProvider.isFeatureSupported(ModalityFeature.textToText)) {
+          throw Exception('当前服务不支持文本处理');
         }
-        return await service.textCompletion(input);
+        return await service.textToText(input);
 
       case TaskType.image:
-        throw UnimplementedError('图片任务功能尚未实现');
+        if (!_llmProvider.isFeatureSupported(ModalityFeature.imageToText)) {
+          throw Exception('当前服务不支持图片处理');
+        }
+        return await processImageUnderstanding(input as Uint8List);
 
       case TaskType.video:
-        throw UnimplementedError('视频任务功能尚未实现');
+        throw Exception('当前服务不支持视频处理');
 
       case TaskType.audio:
-        throw UnimplementedError('语音任务功能尚未实现');
+        if (!_llmProvider.isFeatureSupported(ModalityFeature.speechToText)) {
+          throw Exception('当前服务不支持语音处理');
+        }
+        return await processSpeechToText(input as Uint8List);
 
       case TaskType.uiUnderstanding:
         throw UnimplementedError('UI理解任务功能尚未实现');
@@ -72,8 +82,8 @@ class CustomTaskAgent {
     if (service == null) {
       throw Exception('未选择LLM服务');
     }
-    if (!_llmProvider.isFeatureSupported(LLMFeature.speechToText)) {
-      throw Exception('当前LLM服务不支持语音转文本');
+    if (!_llmProvider.isFeatureSupported(ModalityFeature.speechToText)) {
+      throw Exception('当前服务不支持语音转文本');
     }
     return await service.speechToText(audioData);
   }
@@ -84,8 +94,8 @@ class CustomTaskAgent {
     if (service == null) {
       throw Exception('未选择LLM服务');
     }
-    if (!_llmProvider.isFeatureSupported(LLMFeature.textToSpeech)) {
-      throw Exception('当前LLM服务不支持文本转语音');
+    if (!_llmProvider.isFeatureSupported(ModalityFeature.textToSpeech)) {
+      throw Exception('当前服务不支持文本转语音');
     }
     return await service.textToSpeech(text);
   }
@@ -96,10 +106,10 @@ class CustomTaskAgent {
     if (service == null) {
       throw Exception('未选择LLM服务');
     }
-    if (!_llmProvider.isFeatureSupported(LLMFeature.imageUnderstanding)) {
-      throw Exception('当前LLM服务不支持图像理解');
+    if (!_llmProvider.isFeatureSupported(ModalityFeature.imageToText)) {
+      throw Exception('当前服务不支持图像理解');
     }
-    return await service.imageUnderstanding(imageData);
+    return await service.imageToText(imageData);
   }
 
   /// 处理文本输入并生成图像
@@ -108,9 +118,9 @@ class CustomTaskAgent {
     if (service == null) {
       throw Exception('未选择LLM服务');
     }
-    if (!_llmProvider.isFeatureSupported(LLMFeature.imageGeneration)) {
-      throw Exception('当前LLM服务不支持图像生成');
+    if (!_llmProvider.isFeatureSupported(ModalityFeature.textToImage)) {
+      throw Exception('当前服务不支持图像生成');
     }
-    return await service.imageGeneration(prompt);
+    return await service.textToImage(prompt);
   }
 }

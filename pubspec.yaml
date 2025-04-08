@@ -56,6 +56,7 @@ dependencies:
   image_picker: ^1.0.7        # 图片选择
   record: ^5.0.4             # 音频录制
   flutter_launcher_icons: ^0.14.3
+  file_picker: ^8.0.0+1
 
 dev_dependencies:
   flutter_test:

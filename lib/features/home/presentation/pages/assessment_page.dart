@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/llm/llm_provider.dart';
-import '../../../../core/llm/llm_service.dart';
+import '../../../../core/llm/multi_modal_service.dart';
 import '../../../../core/agent/agent_provider.dart';
 import '../widgets/custom_task_view.dart';
 
@@ -94,10 +94,10 @@ class AssessmentView extends StatelessWidget {
                 return ListTile(
                   title: Text(service.serviceName),
                   subtitle: Text(service.serviceDescription),
-                  leading: Radio<LLMService>(
+                  leading: Radio<MultiModalService>(
                     value: service,
                     groupValue: provider.currentService,
-                    onChanged: (LLMService? value) {
+                    onChanged: (MultiModalService? value) {
                       if (value != null) {
                         provider.setCurrentService(value);
                       }
@@ -142,13 +142,13 @@ class AssessmentView extends StatelessWidget {
     );
   }
 
-  Widget _buildFeaturesList(LLMService service) {
+  Widget _buildFeaturesList(MultiModalService service) {
     final features = {
-      LLMFeature.textCompletion: '文本对话',
-      LLMFeature.speechToText: '语音转文本',
-      LLMFeature.textToSpeech: '文本转语音',
-      LLMFeature.imageUnderstanding: '图像理解',
-      LLMFeature.imageGeneration: '图像生成',
+      ModalityFeature.textToText: '文本对话',
+      ModalityFeature.speechToText: '语音转文本',
+      ModalityFeature.textToSpeech: '文本转语音',
+      ModalityFeature.imageToText: '图像理解',
+      ModalityFeature.textToImage: '图像生成',
     };
 
     return Card(
