@@ -40,12 +40,41 @@ class CustomTaskAgent {
       throw Exception('未选择LLM服务');
     }
 
+    // 处理多模态输入
+    if (input is Map) {
+      if (input.containsKey('text')) {
+        if (input.containsKey('audio')) {
+          if (!_llmProvider.isFeatureSupported(
+            ModalityFeature.textSpeechToText,
+          )) {
+            throw Exception('当前服务不支持文本+语音处理');
+          }
+          return await service.textSpeechToText(
+            input['text'] as String,
+            input['audio'] as Uint8List,
+          );
+        }
+        if (input.containsKey('image')) {
+          if (!_llmProvider.isFeatureSupported(
+            ModalityFeature.textImageToText,
+          )) {
+            throw Exception('当前服务不支持文本+图像处理');
+          }
+          return await service.textImageToText(
+            input['text'] as String,
+            input['image'] as Uint8List,
+          );
+        }
+      }
+    }
+
+    // 处理单一模态输入
     switch (taskType) {
       case TaskType.text:
         if (!_llmProvider.isFeatureSupported(ModalityFeature.textToText)) {
           throw Exception('当前服务不支持文本处理');
         }
-        return await service.textToText(input);
+        return await service.textToText(input as String);
 
       case TaskType.image:
         if (!_llmProvider.isFeatureSupported(ModalityFeature.imageToText)) {

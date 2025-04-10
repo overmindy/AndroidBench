@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 import 'key_manager.dart';
 import 'multi_modal_service.dart';
 import 'api_service.dart';
@@ -55,10 +56,17 @@ class GPT4Service extends ApiService implements MultiModalService {
 
   @override
   Future<String> speechToText(Uint8List audioData) async {
-    final response = await post(
-      '/audio/transcriptions',
-      data: {'file': audioData, 'model': _model, 'response_format': 'text'},
-    );
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        audioData,
+        filename: 'audio.wav',
+        contentType: MediaType('audio', 'wav'),
+      ),
+      'model': 'whisper-1',
+      'response_format': 'text',
+    });
+
+    final response = await post('/audio/transcriptions', data: formData);
     return response.toString();
   }
 
@@ -107,28 +115,87 @@ class GPT4Service extends ApiService implements MultiModalService {
   }
 
   @override
-  Future<String> textImageToText(String text, Uint8List imageData) {
-    throw UnimplementedError();
+  Future<String> textImageToText(String text, Uint8List imageData) async {
+    final response = await post(
+      '/chat/completions',
+      data: {
+        'model': _model,
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {'type': 'text', 'text': text},
+              {
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:image/jpeg;base64,${base64Encode(imageData)}',
+                },
+              },
+            ],
+          },
+        ],
+        'max_tokens': 300,
+      },
+    );
+    return response['choices'][0]['message']['content'];
   }
 
   @override
-  Future<String> textSpeechToText(String text, Uint8List audioData) {
-    throw UnimplementedError();
+  Future<String> textSpeechToText(String text, Uint8List audioData) async {
+    final transcription = await post(
+      '/audio/transcriptions',
+      data: {'file': audioData, 'model': _model, 'response_format': 'text'},
+    );
+
+    final response = await post(
+      '/chat/completions',
+      data: {
+        'model': _model,
+        'messages': [
+          {'role': 'user', 'content': '$text\n音频内容：$transcription'},
+        ],
+        'max_tokens': 300,
+      },
+    );
+    return response['choices'][0]['message']['content'];
   }
 
   @override
-  Future<Uint8List> textImageToSpeech(String text, Uint8List imageData) {
-    throw UnimplementedError();
+  Future<Uint8List> textImageToSpeech(String text, Uint8List imageData) async {
+    final description = await imageToText(imageData);
+    final response = await post(
+      '/audio/speech',
+      data: {
+        'model': _model,
+        'input': '$text\n图片描述：$description',
+        'voice': 'alloy',
+      },
+    );
+    return handleBinaryResponse(response);
   }
 
   @override
-  Future<Uint8List> textSpeechToSpeech(String text, Uint8List audioData) {
-    throw UnimplementedError();
+  Future<Uint8List> textSpeechToSpeech(String text, Uint8List audioData) async {
+    final transcription = await speechToText(audioData);
+    final response = await post(
+      '/audio/speech',
+      data: {
+        'model': _model,
+        'input': '$text\n音频内容：$transcription',
+        'voice': 'alloy',
+      },
+    );
+    return handleBinaryResponse(response);
   }
 
   @override
-  Future<Uint8List> speechToSpeech(Uint8List audioData) {
-    throw UnimplementedError();
+  Future<Uint8List> speechToSpeech(Uint8List audioData) async {
+    final transcription = await speechToText(audioData);
+    final response = await post(
+      '/audio/speech',
+      data: {'model': _model, 'input': transcription, 'voice': 'alloy'},
+    );
+    return handleBinaryResponse(response);
   }
 
   @override
@@ -242,10 +309,19 @@ class GPT4Service extends ApiService implements MultiModalService {
     }
     final dio = Dio();
     try {
+      final options = Options(
+        headers: headers,
+        responseType: ResponseType.json,
+      );
+
+      if (data is FormData) {
+        options.contentType = 'multipart/form-data';
+      }
+
       final response = await dio.post(
         getEndpoint(path),
         data: data,
-        options: Options(headers: headers, responseType: ResponseType.json),
+        options: options,
       );
 
       if (response.statusCode != 200) {

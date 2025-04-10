@@ -33,6 +33,11 @@ class _CustomTaskViewState extends State<CustomTaskView> {
   String? _selectedFileName;
   bool _isRecording = false;
 
+  // 多模态任务的文本输入控制器
+  final TextEditingController _imageTextController = TextEditingController();
+  final TextEditingController _videoTextController = TextEditingController();
+  final TextEditingController _audioTextController = TextEditingController();
+
   // 文件选择方法
   Future<void> _pickFile(String type) async {
     try {
@@ -140,8 +145,34 @@ class _CustomTaskViewState extends State<CustomTaskView> {
     if (_selectedTaskType == TaskType.text) {
       if (_textController.text.isEmpty) return;
       input = _textController.text;
-    } else if (_selectedFileData == null) {
-      return;
+    } else {
+      if (_selectedFileData == null) {
+        setState(() {
+          _result = '请先选择媒体文件';
+        });
+        return;
+      }
+
+      // 获取对应任务类型的文本输入
+      String? textInput;
+      switch (_selectedTaskType) {
+        case TaskType.image:
+          textInput = _imageTextController.text;
+          break;
+        case TaskType.video:
+          textInput = _videoTextController.text;
+          break;
+        case TaskType.audio:
+          textInput = _audioTextController.text;
+          break;
+        default:
+          break;
+      }
+
+      // 如果有文本输入，将其与文件数据一起处理
+      if (textInput != null && textInput.isNotEmpty) {
+        input = textInput;
+      }
     }
 
     setState(() {
@@ -348,14 +379,35 @@ class _CustomTaskViewState extends State<CustomTaskView> {
               ),
             ] else if (_selectedTaskType == TaskType.image) ...[
               // 图片选择和预览区域
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : () => _pickFile('image'),
-                icon: const Icon(Icons.image),
-                label: const Text('选择图片'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : () => _pickFile('image'),
+                    icon: const Icon(Icons.image),
+                    label: const Text('选择图片'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _processTask,
+                    icon: const Icon(Icons.send),
+                    label: const Text('处理图片'),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
-              // 图片预览区域
+              // 图片任务的文本输入
+              TextField(
+                controller: _imageTextController,
+                decoration: const InputDecoration(
+                  hintText: '输入图片相关的文本描述或提示...',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+
+              // 图片预览和结果显示区域
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -366,19 +418,49 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                   child:
                       _isProcessing
                           ? const Center(child: CircularProgressIndicator())
+                          : _selectedFileData != null
+                          ? Column(
+                            children: [
+                              Expanded(child: Image.memory(_selectedFileData!)),
+                              if (_result.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                SelectableText(_result),
+                              ],
+                            ],
+                          )
                           : const Center(child: Text('选择图片以开始处理')),
                 ),
               ),
             ] else if (_selectedTaskType == TaskType.video) ...[
-              // 视频选择和预览区域
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : () => _pickFile('video'),
-                icon: const Icon(Icons.video_library),
-                label: const Text('选择视频'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : () => _pickFile('video'),
+                    icon: const Icon(Icons.video_library),
+                    label: const Text('选择视频'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _processTask,
+                    icon: const Icon(Icons.send),
+                    label: const Text('处理视频'),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
-              // 视频预览区域
+              // 视频任务的文本输入
+              TextField(
+                controller: _videoTextController,
+                decoration: const InputDecoration(
+                  hintText: '输入视频相关的文本描述或提示...',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+
+              // 视频预览和结果显示区域
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -389,7 +471,20 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                   child:
                       _isProcessing
                           ? const Center(child: CircularProgressIndicator())
-                          : const Center(child: Text('选择视频以开始处理')),
+                          : Column(
+                            children: [
+                              if (_selectedFileName != null)
+                                Text('已选择视频: $_selectedFileName'),
+                              if (_result.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    child: SelectableText(_result),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                 ),
               ),
             ] else if (_selectedTaskType == TaskType.audio) ...[
@@ -407,7 +502,23 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                     icon: const Icon(Icons.audio_file),
                     label: const Text('选择音频'),
                   ),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _processTask,
+                    icon: const Icon(Icons.send),
+                    label: const Text('处理音频'),
+                  ),
                 ],
+              ),
+              const SizedBox(height: 16),
+
+              // 音频任务的文本输入
+              TextField(
+                controller: _audioTextController,
+                decoration: const InputDecoration(
+                  hintText: '输入音频相关的文本描述或提示...',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
               ),
               const SizedBox(height: 16),
 
@@ -422,7 +533,20 @@ class _CustomTaskViewState extends State<CustomTaskView> {
                   child:
                       _isProcessing
                           ? const Center(child: CircularProgressIndicator())
-                          : const Center(child: Text('选择或录制音频以开始处理')),
+                          : Column(
+                            children: [
+                              if (_selectedFileName != null)
+                                Text('已选择音频: $_selectedFileName'),
+                              if (_result.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    child: SelectableText(_result),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                 ),
               ),
             ] else ...[
